@@ -9,7 +9,6 @@ from __future__ import print_function
 
 import sys
 import os
-sys.path.append("/home/meringue/Softwares/pynaoqi-sdk/") #naoqi directory
 sys.path.append("./")
 #os.chdir(os.getcwd())
 import cv2
@@ -20,10 +19,6 @@ import time
 
 from configureNao import ConfigureNao
 from naoqi import ALProxy
-sys.path.append("/home/meringue/Documents/python-nao-golf/yoloNet")
-from yolo.net.yolo_tiny_net import YoloTinyNet
-import tensorflow as tf
-
 
 class VisualBasis(ConfigureNao):
 	"""
