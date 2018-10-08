@@ -5,16 +5,16 @@
 ## ---------------------------------------------------------------------
 
 import sys
-sys.path.append("/home/meringue/Softwares/pynaoqi-sdk/") #naoqi directory
+#sys.path.append("/home/meringue/Softwares/pynaoqi-sdk/") #naoqi directory
 from naoqi import ALProxy
 
 class ConfigureNao(object):
 	"""
 	a basic class for all nao tasks, including motion, bisualization etc.
 	"""
-	def __init__(self, IP):
+	def __init__(self, IP, PORT=9559):
 		self._IP = IP
-		self._PORT = 9559
+		self._PORT = PORT
 		self._cameraProxy = ALProxy("ALVideoDevice", self._IP, self._PORT)
 		self._motionProxy = ALProxy("ALMotion", self._IP, self._PORT)
 		self._postureProxy = ALProxy("ALRobotPosture", self._IP, self._PORT)

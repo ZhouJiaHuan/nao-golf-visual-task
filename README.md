@@ -6,5 +6,5 @@ The Python version is recommended because of more available methods compared wit
 Please make sure that you have installed the **Naoqi** library correctly based on the official reference document.
 
  - Python 2.7
- - OpenCV >= 3.0
+ - OpenCV 2.x or OpenCV 3.x
  - numpy
