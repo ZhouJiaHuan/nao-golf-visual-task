@@ -476,7 +476,7 @@ class StickDetect(VisualBasis):
 		Return: detected stick marked with rectangle or [].
 		"""
 		rects = []
-		if cv2.__version__.split(".")[0] == 3: # for OpenCV >= 3.0.0
+		if cv2.__version__.split(".")[0] == "3": # for OpenCV >= 3.0.0
 			_, contours, _ = cv2.findContours(frameBin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 		else:
 			contours, _ = cv2.findContours(frameBin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
