@@ -13,7 +13,6 @@ import sys
 import os
 #sys.path.append("/home/meringue/Softwares/pynaoqi-sdk/") #naoqi directory
 sys.path.append("./")
-#os.chdir(os.getcwd())
 import cv2
 import numpy as np
 
@@ -59,9 +58,7 @@ class VisualBasis(ConfigureNao):
 			client: client name.
 		Return: none.
 		"""
-		if self._cameraProxy.getActiveCamera() == self._cameraId:
-			print("current camera has been actived.")
-		else:
+		if self._cameraProxy.getActiveCamera() != self._cameraId:
 			self._cameraProxy.setActiveCamera(self._cameraId)
 		self._videoClient = self._cameraProxy.subscribe(client, self._resolution, self._colorSpace, self._fps)
 		frame = self._cameraProxy.getImageRemote(self._videoClient)
@@ -178,11 +175,11 @@ class BallDetect(VisualBasis):
 			print("supported color:red, green and blue.")
 			return None
 
-	def __binImageHSV(self, color):
+	def __binImageHSV(self, minHSV1, maxHSV1, minHSV2, maxHSV2):
 		"""
 		get binary image from the HSV image (transformed from BGR image)
 		Args:
-			color: the color for binarization.
+			minHSV1, maxHSV1, minHSV2, maxHSV2: parameters [np.array] for red ball detection
 		Return:
 			binImage: binary image.
 		"""
@@ -191,19 +188,12 @@ class BallDetect(VisualBasis):
 			imgHSV = cv2.cvtColor(frameArray, cv2.COLOR_BGR2HSV)
 		except:
 			raise Exception("no image detected!")
-		if color == "red":
-			minHSV1=np.array([0,43,46])
-			maxHSV1=np.array([10,255,255])
-			minHSV2=np.array([156,43,46])
-			maxHSV2=np.array([180,255,255])
-			frameBin1 = cv2.inRange(imgHSV, minHSV1, maxHSV1)
-			frameBin2 = cv2.inRange(imgHSV, minHSV2, maxHSV2)
-			frameBin = np.maximum(frameBin1, frameBin2)
-			frameBin = cv2.GaussianBlur(frameBin, (9,9), 1.5)
-			cv2.imshow("bin image", frameBin)
-			return frameBin
-		else:
-			raise Exception("not recognize the color!")            
+		frameBin1 = cv2.inRange(imgHSV, minHSV1, maxHSV1)
+		frameBin2 = cv2.inRange(imgHSV, minHSV2, maxHSV2)
+		frameBin = np.maximum(frameBin1, frameBin2)
+		frameBin = cv2.GaussianBlur(frameBin, (9,9), 1.5)
+		#cv2.imshow("bin image", frameBin)
+		return frameBin        
 
 	def __findCircles(self, img, minDist, minRadius, maxRadius):
 		"""
@@ -270,8 +260,6 @@ class BallDetect(VisualBasis):
 			gScore = float(np.sum(np.uint8(gFlat>1.0*rFlat)))
 			rRatio = rScore/len(rFlat)
 			gRatio = gScore/len(gFlat) 
-			# print("red ratio = ", rRatio)
-			# print("green ratio = ", gRatio)
 			if rRatio>=0.12 and gRatio>=0.1 and abs(rRatio-0.19)<abs(rRatioMin-0.19):
 				circleSelected = circle
 				rRatioMin = rRatio		
@@ -342,44 +330,50 @@ class BallDetect(VisualBasis):
 				radius = self._ballData["radius"]
 				cameraPos = self._motionProxy.getPosition(self._cameraName, motion.FRAME_WORLD, True)
 				cameraX, cameraY, cameraHeight = cameraPos[:3]
-				head_yaw, head_pitch = self._motionProxy.getAngles("Head", True)
-				camera_pitch = head_pitch + cameraDirection
-				img_center_x = self._frameWidth/2
-				img_center_y = self._frameHeight/2
-				center_x = self._ballData["centerX"]
-				center_y = self._ballData["centerY"]
-				img_pitch = (center_y-img_center_y)/(self._frameHeight)*self._cameraPitchRange
-				img_yaw = (img_center_x-center_x)/(self._frameWidth)*self._cameraYawRange
-				ball_pitch = camera_pitch + img_pitch
-				ball_yaw = img_yaw + head_yaw
-				print("ball yaw = ", ball_yaw/np.pi*180)
-				dis_x = (cameraHeight-self._ballRadius)/np.tan(ball_pitch) + np.sqrt(cameraX**2+cameraY**2)
-				dis_y = dis_x*np.sin(ball_yaw)
-				dis_x = dis_x*np.cos(ball_yaw)
-				self._ballPosition["disX"] = dis_x
-				self._ballPosition["disY"] = dis_y
-				self._ballPosition["angle"] = ball_yaw
+				headYaw, headPitch = self._motionProxy.getAngles("Head", True)
+				cameraPitch = headPitch + cameraDirection
+				imgCenterX = self._frameWidth/2
+				imgCenterY = self._frameHeight/2
+				centerX = self._ballData["centerX"]
+				centerY = self._ballData["centerY"]
+				imgPitch = (centerY-imgCenterY)/(self._frameHeight)*self._cameraPitchRange
+				imgYaw = (imgCenterX-centerX)/(self._frameWidth)*self._cameraYawRange
+				ballPitch = cameraPitch + imgPitch
+				ballYaw = imgYaw + headYaw
+				disX = (cameraHeight-self._ballRadius)/np.tan(ballPitch) + np.sqrt(cameraX**2+cameraY**2)
+				disY = disX*np.sin(ballYaw)
+				disX = disX*np.cos(ballYaw)
+				self._ballPosition["disX"] = disX
+				self._ballPosition["disY"] = disY
+				self._ballPosition["angle"] = ballYaw
 			
 							   
-	def updateBallData(self, client="python_client", standState="standInit", color="red", color_space="BGR", fitting=False):
+	def updateBallData(self, client="python_client", standState="standInit", color="red", colorSpace="BGR", 
+					   fitting=False, minHSV1=np.array([0,43,46]), maxHSV1=np.array([10,255,255]), 
+					   minHSV2=np.array([156,43,46]), maxHSV2=np.array([180,255,255]), saveFrameBin=False):
 		"""
 		update the ball data with the frame get from the bottom camera.
 		Arguments:
 			standState: ("standInit", default), "standInit" or "standUp".
 			color: ("red", default) the color of ball to be detected.
-			color_space: "BGR", "HSV".
+			colorSpace: "BGR", "HSV".
 			fittting: the method of localization.
-		Return: a dict with ball data. for example: {"centerX":0, "centerY":0, "radius":0}.
+			minHSV1, maxHSV1, minHSV2, maxHSV2: only for HSV color space.
+			saveFrameBin: save the preprocessed frame or not.
+		Return: 
+			a dict with ball data. for example: {"centerX":0, "centerY":0, "radius":0}.
 		"""
 		self.updateFrame(client)
 		#cv2.imwrite("src_image.jpg", self._frameArray)
 		minDist = int(self._frameHeight/30.0)
 		minRadius = 1
 		maxRadius = int(self._frameHeight/10.0)
-		if color_space == "BGR":
+		if colorSpace == "BGR":
 			grayFrame = self.__getChannelAndBlur(color)
 		else:
-			grayFrame = self.__binImageHSV(color)
+			grayFrame = self.__binImageHSV(minHSV1, maxHSV1, minHSV2, maxHSV2)
+		if saveFrameBin:
+			self._frameBin = grayFrame.copy()
 		#cv2.imshow("bin frame", grayFrame)
 		#cv2.imwrite("bin_frame.jpg", grayFrame)
 		#cv2.waitKey(20)
@@ -401,7 +395,6 @@ class BallDetect(VisualBasis):
 	def getBallPostion(self):
 		"""
 		get ball position.
-		
 		Return: distance in x axis, distance in y axis and direction related to Nao.
 		"""
 		return [self._ballPosition["disX"], self._ballPosition["disY"], self._ballPosition["angle"]]
@@ -423,6 +416,40 @@ class BallDetect(VisualBasis):
 					   2, (50,250,50), 3)
 			cv2.imshow("ball position", frameArray)
 			#cv2.imwrite("ball_position.jpg", frameArray)
+	
+	def sliderHSV(self, client):
+		"""
+		slider for ball detection in HSV color space.
+		Args:
+			client: client name.
+		"""
+		def __nothing():
+			pass
+		windowName = "slider for ball detection"
+		cv2.namedWindow(windowName)
+		cv2.createTrackbar("minS1", windowName, 43, 60, __nothing)
+		cv2.createTrackbar("minV1", windowName, 46, 65, __nothing)
+		cv2.createTrackbar("maxH1", windowName, 10, 20, __nothing)
+		cv2.createTrackbar("minH2", windowName, 156, 175, __nothing)
+		while 1:
+			self.updateFrame(client)
+			minS1 = cv2.getTrackbarPos("minS1", windowName)
+			minV1 = cv2.getTrackbarPos("minV1", windowName)
+			maxH1 = cv2.getTrackbarPos("maxH1", windowName)
+			minH2 = cv2.getTrackbarPos("minH2", windowName)
+			minHSV1 = np.array([0, minS1, minV1])
+			maxHSV1 = np.array([maxH1, 255, 255])
+			minHSV2 = np.array([minH2, minS1, minV1])
+			maxHSV2=np.array([180,255,255])
+			self.updateBallData(client, colorSpace="HSV", minHSV1=minHSV1, 
+								maxHSV1=maxHSV1, minHSV2=minHSV2, 
+								maxHSV2=maxHSV2, saveFrameBin=True)
+			cv2.imshow(windowName, self._frameBin)
+			self.showBallPosition()
+			k = cv2.waitKey(10) & 0xFF
+			if k == 27:
+				break
+		cv2.destroyAllWindows()
 
 
 class StickDetect(VisualBasis):
@@ -499,7 +526,9 @@ class StickDetect(VisualBasis):
 		rect[1] += int(self._frameHeight *(1-self._cropKeep))
 		return rect
 		
-	def updateStickData(self, client="test", minHSV=np.array([27,55,115]), maxHSV=np.array([45,255,255]), cropKeep=1, morphology=True):
+	def updateStickData(self, client="test", minHSV=np.array([27,55,115]), 
+						maxHSV=np.array([45,255,255]), cropKeep=1, 
+						morphology=True, savePreprocessImg=False):
 		"""
 		update the yellow stick data from the specified camera.
 		Args:
@@ -508,11 +537,15 @@ class StickDetect(VisualBasis):
 			maxHSV: the upper limit for binalization.
 			cropKeep:  crop ratio (>=0.5).
 			morphology: (True, default), erosion and dilation.
+			savePreprocessImg: save the preprocessed image or not.
 		"""
 		self.updateFrame(client)
 		minPerimeter = self._frameHeight/8.0
 		minArea = self._frameHeight*self._frameWidth/1000.0
 		frameBin = self.__preprocess(minHSV, maxHSV, cropKeep, morphology)
+		print(np.max(frameBin))
+		if savePreprocessImg:
+			self._frameBin = frameBin.copy()
 		rect = self.__findStick(frameBin, minPerimeter, minArea)
 		if rect == []:
 			self._boundRect = []
@@ -539,3 +572,32 @@ class StickDetect(VisualBasis):
 			frame = self._frameArray.copy()
 			cv2.rectangle(frame, (x,y), (x+w,y+h), (0,0,255), 2)
 			cv2.imshow("stick position", frame)
+
+	def slider(self, client):
+		"""
+		slider for stick detection in HSV color space.
+		client: client name.
+		"""
+		def __nothing():
+			pass
+		windowName = "slider for stick detection"
+		cv2.namedWindow(windowName)
+		cv2.createTrackbar("minH", windowName, 27, 45, __nothing)
+		cv2.createTrackbar("minS", windowName, 55, 75, __nothing)
+		cv2.createTrackbar("minV", windowName, 115, 150, __nothing)
+		cv2.createTrackbar("maxH", windowName, 45, 70, __nothing)
+		while 1:
+			self.updateFrame(client)
+			minH = cv2.getTrackbarPos("minH", windowName)
+			minS = cv2.getTrackbarPos("minS", windowName)
+			minV = cv2.getTrackbarPos("minV", windowName)
+			maxH = cv2.getTrackbarPos("maxH", windowName)
+			minHSV = np.array([minH, minS, minV])
+			maxHSV = np.array([maxH, 255, 255])
+			self.updateStickData(client, minHSV, maxHSV, savePreprocessImg=True)
+			cv2.imshow(windowName, self._frameBin)
+			self.showStickPosition()
+			k = cv2.waitKey(10) & 0xFF
+			if k == 27:
+				break
+		cv2.destroyAllWindows()

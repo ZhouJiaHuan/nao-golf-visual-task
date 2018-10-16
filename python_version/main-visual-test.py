@@ -19,7 +19,8 @@ from visualTask import *
 from naoqi import ALProxy
 import vision_definitions as vd
 
-IP = "192.168.1.100"
+#IP = "192.168.1.100"
+IP = "169.254.67.213"
 
 visualBasis = VisualBasis(IP,cameraId=0, resolution=vd.kVGA)
 ballDetect = BallDetect(IP, resolution=vd.kVGA)
@@ -33,21 +34,21 @@ visualBasis.printFrameData()
 """
 
 
-"""
+
 while 1:
 	time1 = time.time()
-	ballDetect.updateBallData(client="xxx")
+	ballDetect.updateBallData(client="xx")
 	time2 = time.time()
-	print("updare data time = ", time2-time1)
+	print("update data time = ", time2-time1)
 	ballDetect.showBallPosition()
 	cv2.waitKey(10)
+
+
 """
-
-
 while 1:
 	stickDetect.updateStickData(client="xxx")
 	stickDetect.showStickPosition(showTime = 10)
-
+"""
 
 
 """
