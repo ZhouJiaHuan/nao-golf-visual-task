@@ -461,7 +461,7 @@ class StickDetect(VisualBasis):
 		super(StickDetect, self).__init__(IP, PORT, cameraId, resolution)
 		self._boundRect = []
 		self._cropKeep = 1
-		self._stickAngle = None # rad
+		self._stickAngle = 0.0 # rad
 		
 	def __preprocess(self, minHSV, maxHSV, cropKeep, morphology):
 		"""
@@ -549,7 +549,7 @@ class StickDetect(VisualBasis):
 		rect = self.__findStick(frameBin, minPerimeter, minArea)
 		if rect == []:
 			self._boundRect = []
-			self._stickAngle = None
+			self._stickAngle = 0.0
 		else:
 			self._boundRect = rect
 			centerX = rect[0]+rect[2]/2
