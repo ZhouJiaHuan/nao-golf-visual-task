@@ -1,9 +1,9 @@
 #coding: utf-8
-## ---------------------------------------------------------------------
-# author: Meringue
-# date: 1/15/2018
-# description: visual classes for Nao golf task.
-## ---------------------------------------------------------------------
+"""
+visual classes for Nao golf task.
+@author: Meringue
+@date: 2018/1/15
+"""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -13,99 +13,108 @@ import sys
 import os
 #sys.path.append("/home/meringue/Softwares/pynaoqi-sdk/") #naoqi directory
 sys.path.append("./")
-import cv2
 import numpy as np
-
 import vision_definitions as vd
 import time
-
 from configureNao import ConfigureNao
 from naoqi import ALProxy
 import motion
+import math
+import almath
+import cv2
 
+cv_version = cv2.__version__.split(".")[0]
+if cv_version == "2": # for OpenCV 2
+	import cv2.cv as cv
 
 class VisualBasis(ConfigureNao):
 	"""
 	a basic class for visual task.
 	"""
-	def __init__(self, IP, PORT=9559, cameraId=1, resolution=vd.kVGA):
+	def __init__(self, IP, PORT=9559, cameraId=vd.kBottomCamera, resolution=vd.kVGA):
 		"""
 		initilization. 
+
 		Args:
 			IP: NAO's IP
 			cameraId: bottom camera (1,default) or top camera (0).
 			resolution: kVGA, default: 640*480)
-		Return: none
+		Return: 
+			none
 		"""     
 		super(VisualBasis, self).__init__(IP, PORT)
-		self._cameraId = cameraId
-		self._cameraName = "CameraBottom" if self._cameraId==1 else "CameraTop"
-		self._resolution = resolution
-		self._colorSpace = vd.kBGRColorSpace
-		self._fps = 20
-		self._frameHeight = 0
-		self._frameWidth = 0
-		self._frameChannels = 0
-		self._frameArray = None
-		self._cameraPitchRange = 47.64/180*np.pi
-		self._cameraYawRange = 60.97/180*np.pi
-		self._cameraProxy.setActiveCamera(self._cameraId)
+		self.cameraId = cameraId
+		self.cameraName = "CameraBottom" if self.cameraId==vd.kBottomCamera else "CameraTop"
+		self.resolution = resolution
+		self.colorSpace = vd.kBGRColorSpace
+		self.fps = 20
+		self.frameHeight = 0
+		self.frameWidth = 0
+		self.frameChannels = 0
+		self.frameArray = None
+		self.cameraPitchRange = 47.64/180*np.pi
+		self.cameraYawRange = 60.97/180*np.pi
+		self.cameraProxy.setActiveCamera(self.cameraId)
 							 
 	def updateFrame(self, client="python_client"):
 		"""
 		get a new image from the specified camera and save it in self._frame.
+
 		Args:
 			client: client name.
-		Return: none.
+		Return: 
+			none.
 		"""
-		if self._cameraProxy.getActiveCamera() != self._cameraId:
-			self._cameraProxy.setActiveCamera(self._cameraId)
-		self._videoClient = self._cameraProxy.subscribe(client, self._resolution, self._colorSpace, self._fps)
-		frame = self._cameraProxy.getImageRemote(self._videoClient)
-		self._cameraProxy.unsubscribe(self._videoClient)
+		if self.cameraProxy.getActiveCamera() != self.cameraId:
+			self.cameraProxy.setActiveCamera(self.cameraId)
+		self._videoClient = self.cameraProxy.subscribe(client, self.resolution, self.colorSpace, self.fps)
+		frame = self.cameraProxy.getImageRemote(self._videoClient)
+		self.cameraProxy.unsubscribe(self._videoClient)
 		try:
-			self._frameWidth = frame[0]
-			self._frameHeight = frame[1]
-			self._frameChannels = frame[2]
-			self._frameArray = np.frombuffer(frame[6], dtype=np.uint8).reshape([frame[1],frame[0],frame[2]])
+			self.frameWidth = frame[0]
+			self.frameHeight = frame[1]
+			self.frameChannels = frame[2]
+			self.frameArray = np.frombuffer(frame[6], dtype=np.uint8).reshape([frame[1],frame[0],frame[2]])
 		except IndexError:
 			raise
 		
 	def getFrameArray(self):
 		"""
 		get current frame.
+
 		Return: 
 			current frame array (numpy array).
 		"""
-		if self._frameArray is None:
+		if self.frameArray is None:
 			return np.array([])
-		return self._frameArray
+		return self.frameArray
 				
 	def showFrame(self):
 		"""
 		show current frame image.
 		"""
-		if self._frameArray is None:
+		if self.frameArray is None:
 			print("please get an image from Nao with the method updateFrame()")
 		else:
-			cv2.imshow("current frame", self._frameArray)
+			cv2.imshow("current frame", self.frameArray)
 			
 	def printFrameData(self):
 		"""
 		print current frame data.
 		"""
-		print("frame height = ", self._frameHeight)
-		print("frame width = ", self._frameWidth)
-		print("frame channels = ", self._frameChannels)
-		print("frame shape = ", self._frameArray.shape)
+		print("frame height = ", self.frameHeight)
+		print("frame width = ", self.frameWidth)
+		print("frame channels = ", self.frameChannels)
+		print("frame shape = ", self.frameArray.shape)
 		
 	def saveFrame(self, framePath):
 		"""
-		save current frame to specified direction.		
+		save current frame to specified direction.
+
 		Arguments:
 			framePath: image path.
 		"""
-		cv2.imwrite(framePath, self._frameArray)
+		cv2.imwrite(framePath, self.frameArray)
 		print("current frame image has been saved in", framePath)
 			  
 	def setParam(self, paramName=None, paramValue = None):
@@ -124,22 +133,23 @@ class BallDetect(VisualBasis):
 		initialization.
 		"""
 		super(BallDetect, self).__init__(IP, PORT, cameraId, resolution)
-		self._ballData = {"centerX":0, "centerY":0, "radius":0}
-		self._ballPosition= {"disX":0, "disY":0, "angle":0}
-		self._ballRadius = 0.05
+		self.ballData = {"centerX":0, "centerY":0, "radius":0}
+		self.ballPosition= {"disX":0, "disY":0, "angle":0}
+		self.ballRadius = 0.025
 
 	def __getChannelAndBlur(self, color):
 		"""
 		get the specified channel and blur the result.
-		Arguments:
+
+		Args:
 			color: the color channel to split, only supports the color of red, geen and blue.   
 		Return: 
 			the specified color channel or None (when the color is not supported).
 		"""
 		try:
-			channelB = self._frameArray[:,:,0]
-			channelG = self._frameArray[:,:,1]
-			channelR = self._frameArray[:,:,2]
+			channelB = self.frameArray[:,:,0]
+			channelG = self.frameArray[:,:,1]
+			channelR = self.frameArray[:,:,2]
 		except:
 			raise Exception("no image detected!")
 		Hm = 6
@@ -178,13 +188,14 @@ class BallDetect(VisualBasis):
 	def __binImageHSV(self, minHSV1, maxHSV1, minHSV2, maxHSV2):
 		"""
 		get binary image from the HSV image (transformed from BGR image)
+
 		Args:
 			minHSV1, maxHSV1, minHSV2, maxHSV2: parameters [np.array] for red ball detection
 		Return:
 			binImage: binary image.
 		"""
 		try:
-			frameArray = self._frameArray.copy()
+			frameArray = self.frameArray.copy()
 			imgHSV = cv2.cvtColor(frameArray, cv2.COLOR_BGR2HSV)
 		except:
 			raise Exception("no image detected!")
@@ -198,7 +209,8 @@ class BallDetect(VisualBasis):
 	def __findCircles(self, img, minDist, minRadius, maxRadius):
 		"""
 		detect circles from an image.
-		Arguments:
+
+		Args:
 			img: image to be detected.
 			minDist: minimum distance between the centers of the detected circles.
 			minRadius: minimum circle radius.
@@ -211,10 +223,10 @@ class BallDetect(VisualBasis):
 		if cv_version == "3": # for OpenCV >= 3.0.0
 			gradient_name = cv2.HOUGH_GRADIENT
 		else:
-			import cv2.cv as cv
 			gradient_name = cv.CV_HOUGH_GRADIENT
-		circles = cv2.HoughCircles(np.uint8(img), gradient_name, 1, minDist, 
-								   param1=150, param2=15, minRadius=minRadius, maxRadius=maxRadius)
+		circles = cv2.HoughCircles(np.uint8(img), gradient_name, 1, \
+								   minDist, param1=150, param2=15, \
+								   minRadius=minRadius, maxRadius=maxRadius)
 		if circles is None:
 			return np.uint16([])
 		else:
@@ -223,6 +235,7 @@ class BallDetect(VisualBasis):
 	def __selectCircle(self, circles):
 		"""
 		select one circle in list type from all circles detected. 
+
 		Args:
 			circles: numpy array shaped (N, 3),　N is the number of circles.
 		Return:
@@ -236,11 +249,12 @@ class BallDetect(VisualBasis):
 			radius = circles[0][2]
 			initX = centerX - 2*radius
 			initY = centerY - 2*radius
-			if initX<0 or initY<0 or (initX+4*radius)>self._frameWidth or (initY+4*radius)>self._frameHeight or radius<1:
+			if (initX<0 or initY<0 or (initX+4*radius)>self.frameWidth or \
+			   (initY+4*radius)>self.frameHeight or radius<1):
 				return circles	
-		channelB = self._frameArray[:,:,0]
-		channelG = self._frameArray[:,:,1]
-		channelR = self._frameArray[:,:,2]
+		channelB = self.frameArray[:,:,0]
+		channelG = self.frameArray[:,:,1]
+		channelR = self.frameArray[:,:,2]
 		rRatioMin = 1.0; circleSelected = np.uint16([])
 		for circle in circles:
 			centerX = circle[0]
@@ -248,9 +262,10 @@ class BallDetect(VisualBasis):
 			radius = circle[2]
 			initX = centerX - 2*radius
 			initY = centerY - 2*radius
-			if initX<0 or initY<0 or (initX+4*radius)>self._frameWidth or (initY+4*radius)>self._frameHeight or radius<1:
+			if initX<0 or initY<0 or (initX+4*radius)>self.frameWidth or \
+			   (initY+4*radius)>self.frameHeight or radius<1:
 				continue	
-			rectBallArea = self._frameArray[initY:initY+4*radius+1, initX:initX+4*radius+1,:]
+			rectBallArea = self.frameArray[initY:initY+4*radius+1, initX:initX+4*radius+1,:]
 			bFlat = np.float16(rectBallArea[:,:,0].flatten())
 			gFlat = np.float16(rectBallArea[:,:,1].flatten())
 			rFlat = np.float16(rectBallArea[:,:,2].flatten())
@@ -268,48 +283,49 @@ class BallDetect(VisualBasis):
 	def __updateBallPositionFitting(self, standState):
 		"""
 		compute and update the ball position with compensation.
+
 		Args:
 			standState: "standInit" or "standUp".
 		"""
 		bottomCameraDirection = {"standInit":49.2, "standUp":39.7} 
-		ballRadius = self._ballRadius
+		ballRadius = self.ballRadius
 		try:
 			cameraDirection = bottomCameraDirection[standState]
 		except KeyError:
 			print("Error! unknown standState, please check the value of stand state!")
 			raise
 		else:
-			if self._ballData["radius"] == 0:
-				self._ballPosition= {"disX":0, "disY":0, "angle":0}
+			if self.ballData["radius"] == 0:
+				self.ballPosition= {"disX":0, "disY":0, "angle":0}
 			else:
-				centerX = self._ballData["centerX"]
-				centerY = self._ballData["centerY"]
-				radius = self._ballData["radius"]
-				cameraPosition = self._motionProxy.getPosition("CameraBottom", 2, True)
+				centerX = self.ballData["centerX"]
+				centerY = self.ballData["centerY"]
+				radius = self.ballData["radius"]
+				cameraPosition = self.motionProxy.getPosition("CameraBottom", 2, True)
 				cameraX = cameraPosition[0]
 				cameraY = cameraPosition[1]
 				cameraHeight = cameraPosition[2]
-				headPitches = self._motionProxy.getAngles("HeadPitch", True)
+				headPitches = self.motionProxy.getAngles("HeadPitch", True)
 				headPitch = headPitches[0]
-				headYaws = self._motionProxy.getAngles("HeadYaw", True)
+				headYaws = self.motionProxy.getAngles("HeadYaw", True)
 				headYaw = headYaws[0]
-				ballPitch = (centerY-240.0)*self._cameraPitchRange/480.0   # y (pitch angle)
-				ballYaw = (320.0-centerX)*self._cameraYawRange/640.0    # x (yaw angle)
+				ballPitch = (centerY-240.0)*self.cameraPitchRange/480.0   # y (pitch angle)
+				ballYaw = (320.0-centerX)*self.cameraYawRange/640.0    # x (yaw angle)
 				dPitch = (cameraHeight-ballRadius)/np.tan(cameraDirection/180*np.pi+headPitch+ballPitch)
 				dYaw = dPitch/np.cos(ballYaw)
 				ballX = dYaw*np.cos(ballYaw+headYaw)+cameraX
 				ballY = dYaw*np.sin(ballYaw+headYaw)+cameraY
 				ballYaw = np.arctan2(ballY, ballX)
-				self._ballPosition["disX"] = ballX                                
+				self.ballPosition["disX"] = ballX                                
 				if (standState == "standInit"):
 					ky = 42.513*ballX**4 - 109.66*ballX**3 + 104.2*ballX**2 - 44.218*ballX + 8.5526               
 					#ky = 12.604*ballX**4 - 37.962*ballX**3 + 43.163*ballX**2 - 22.688*ballX + 6.0526
 					ballY = ky*ballY
 					ballYaw = np.arctan2(ballY,ballX)                    
-				self._ballPosition["disY"] = ballY
-				self._ballPosition["angle"] = ballYaw
+				self.ballPosition["disY"] = ballY
+				self.ballPosition["angle"] = ballYaw
 
-	def __updateBallPosition(self, standState):
+	def __updateBallPosition(self, standState): # test phase
 		"""
 		compute and update the ball position with the ball data in frame.
 		standState: "standInit" or "standUp".
@@ -322,38 +338,49 @@ class BallDetect(VisualBasis):
 			print("Error! unknown standState, please check the value of stand state!")
 			raise
 		else:
-			if self._ballData["radius"] == 0:
-				self._ballPosition= {"disX":0, "disY":0, "angle":0}
+			if self.ballData["radius"] == 0:
+				self.ballPosition= {"disX":0, "disY":0, "angle":0}
 			else:
-				centerX = self._ballData["centerX"]
-				centerY = self._ballData["centerY"]
-				radius = self._ballData["radius"]
-				cameraPos = self._motionProxy.getPosition(self._cameraName, motion.FRAME_WORLD, True)
+				centerX = self.ballData["centerX"]
+				centerY = self.ballData["centerY"]
+				radius = self.ballData["radius"]
+				cameraPos = self.motionProxy.getPosition(self.cameraName, motion.FRAME_WORLD, True)
 				cameraX, cameraY, cameraHeight = cameraPos[:3]
-				headYaw, headPitch = self._motionProxy.getAngles("Head", True)
+				headYaw, headPitch = self.motionProxy.getAngles("Head", True)
 				cameraPitch = headPitch + cameraDirection
-				imgCenterX = self._frameWidth/2
-				imgCenterY = self._frameHeight/2
-				centerX = self._ballData["centerX"]
-				centerY = self._ballData["centerY"]
-				imgPitch = (centerY-imgCenterY)/(self._frameHeight)*self._cameraPitchRange
-				imgYaw = (imgCenterX-centerX)/(self._frameWidth)*self._cameraYawRange
+				imgCenterX = self.frameWidth/2
+				imgCenterY = self.frameHeight/2
+				centerX = self.ballData["centerX"]
+				centerY = self.ballData["centerY"]
+				imgPitch = (centerY-imgCenterY)/(self.frameHeight)*self.cameraPitchRange
+				imgYaw = (imgCenterX-centerX)/(self.frameWidth)*self.cameraYawRange
 				ballPitch = cameraPitch + imgPitch
+				#ballPitch = 38/180.0*3.14
 				ballYaw = imgYaw + headYaw
-				disX = (cameraHeight-self._ballRadius)/np.tan(ballPitch) + np.sqrt(cameraX**2+cameraY**2)
-				disY = disX*np.sin(ballYaw)
-				disX = disX*np.cos(ballYaw)
-				self._ballPosition["disX"] = disX
-				self._ballPosition["disY"] = disY
-				self._ballPosition["angle"] = ballYaw
-			
-							   
-	def updateBallData(self, client="python_client", standState="standInit", color="red", colorSpace="BGR", 
-					   fitting=False, minHSV1=np.array([0,43,46]), maxHSV1=np.array([10,255,255]), 
-					   minHSV2=np.array([156,43,46]), maxHSV2=np.array([180,255,255]), saveFrameBin=False):
+				#ballYaw = 31/180.0*3.14
+				dist = (cameraHeight-self.ballRadius)/np.tan(ballPitch) + np.sqrt(cameraX**2+cameraY**2)
+				#print("height = ", cameraHeight)
+				#print("cameraPitch = ", cameraPitch*180/3.14)
+				#print("imgYaw = ", imgYaw/3.14*180)
+				#print("headYaw = ", headYaw/3.14*180)
+				#print("ballYaw = ",ballYaw/3.14*180)
+				#print("ballPitch = ", ballPitch/3.14*180)
+				disX = dist*np.cos(ballYaw)
+				disY = dist*np.sin(ballYaw)
+				#print("disX = ", disX)
+				#print("disY = ", disY)
+				self.ballPosition["disX"] = disX
+				self.ballPosition["disY"] = disY
+				self.ballPosition["angle"] = ballYaw
+								   
+	def updateBallData(self, client="python_client", standState="standInit", color="red", 
+					   colorSpace="BGR", fitting=False, minHSV1=np.array([0,43,46]), 
+					   maxHSV1=np.array([10,255,255]), minHSV2=np.array([156,43,46]), 
+					   maxHSV2=np.array([180,255,255]), saveFrameBin=False):
 		"""
 		update the ball data with the frame get from the bottom camera.
-		Arguments:
+
+		Args:
 			standState: ("standInit", default), "standInit" or "standUp".
 			color: ("red", default) the color of ball to be detected.
 			colorSpace: "BGR", "HSV".
@@ -365,9 +392,9 @@ class BallDetect(VisualBasis):
 		"""
 		self.updateFrame(client)
 		#cv2.imwrite("src_image.jpg", self._frameArray)
-		minDist = int(self._frameHeight/30.0)
+		minDist = int(self.frameHeight/30.0)
 		minRadius = 1
-		maxRadius = int(self._frameHeight/10.0)
+		maxRadius = int(self.frameHeight/10.0)
 		if colorSpace == "BGR":
 			grayFrame = self.__getChannelAndBlur(color)
 		else:
@@ -381,38 +408,58 @@ class BallDetect(VisualBasis):
 		circle = self.__selectCircle(circles)
 		# print("circle = ", circle.shape)
 		if circle.shape[0] == 0:
-			print("no ball")
-			self._ballData = {"centerX":0, "centerY":0, "radius":0}
-			self._ballPosition= {"disX":0, "disY":0, "angle":0}
+			#print("no ball")
+			self.ballData = {"centerX":0, "centerY":0, "radius":0}
+			self.ballPosition= {"disX":0, "disY":0, "angle":0}
 		else:
 			circle = circle.reshape([-1,3])    
-			self._ballData = {"centerX":circle[0][0], "centerY":circle[0][1], "radius":circle[0][2]}
+			self.ballData = {"centerX":circle[0][0], "centerY":circle[0][1], "radius":circle[0][2]}
 			if fitting == True:
 				self.__updateBallPositionFitting(standState=standState)
 			else:
 				self.__updateBallPosition(standState=standState)
 		  	
-	def getBallPostion(self):
+	def getBallPosition(self):
 		"""
 		get ball position.
-		Return: distance in x axis, distance in y axis and direction related to Nao.
+
+		Return: 
+			distance in x axis, distance in y axis and direction related to Nao.
 		"""
-		return [self._ballPosition["disX"], self._ballPosition["disY"], self._ballPosition["angle"]]
+		disX = self.ballPosition["disX"]
+		disY = self.ballPosition["disY"]
+		angle = self.ballPosition["angle"]
+		return [disX, disY, angle]
+
+	def getBallInfoInImage(self):
+		"""
+		get ball information in image.
+
+		Return:
+			a list of centerX, centerY and radius of the red ball.
+		"""
+		centerX = self.ballData["centerX"]
+		centerY = self.ballData["centerY"]
+		radius = self.ballData["radius"]
+		return [centerX, centerY, radius]
 		
 	def showBallPosition(self):        
 		"""
 		show ball data in the current frame.
 		"""
-		if self._ballData["radius"] == 0:
-			print("no ball found.")
-			cv2.imshow("ball position", self._frameArray)
+		if self.ballData["radius"] == 0:
+			#print("no ball found.")
+			print("ball postion = ", (self.ballPosition["disX"], self.ballPosition["disY"]))
+			cv2.imshow("ball position", self.frameArray)
 		else:
-			print("ball postion = ", (self._ballPosition["disX"], self._ballPosition["disY"]))
-			print("ball direction = ", self._ballPosition["angle"])
-			frameArray = self._frameArray
-			cv2.circle(frameArray, (self._ballData["centerX"],self._ballData["centerY"]),
-					   self._ballData["radius"], (250,150,150),2)
-			cv2.circle(frameArray, (self._ballData["centerX"],self._ballData["centerY"]),
+			#print("ballX = ", self.ballData["centerX"])
+			#print("ballY = ", self.ballData["centerY"])
+			print("ball postion = ", (self.ballPosition["disX"], self.ballPosition["disY"]))
+			#print("ball direction = ", self.ballPosition["angle"]*180/3.14)
+			frameArray = self.frameArray
+			cv2.circle(frameArray, (self.ballData["centerX"],self.ballData["centerY"]),
+					   self.ballData["radius"], (250,150,150),2)
+			cv2.circle(frameArray, (self.ballData["centerX"],self.ballData["centerY"]),
 					   2, (50,250,50), 3)
 			cv2.imshow("ball position", frameArray)
 			#cv2.imwrite("ball_position.jpg", frameArray)
@@ -420,6 +467,7 @@ class BallDetect(VisualBasis):
 	def sliderHSV(self, client):
 		"""
 		slider for ball detection in HSV color space.
+
 		Args:
 			client: client name.
 		"""
@@ -443,7 +491,7 @@ class BallDetect(VisualBasis):
 			maxHSV2=np.array([180,255,255])
 			self.updateBallData(client, colorSpace="HSV", minHSV1=minHSV1, 
 								maxHSV1=maxHSV1, minHSV2=minHSV2, 
-								maxHSV2=maxHSV2, saveFrameBin=True)
+								maxHSV2=maxHSV2, saveFrameBin=True, fitting=True)
 			cv2.imshow(windowName, self._frameBin)
 			self.showBallPosition()
 			k = cv2.waitKey(10) & 0xFF
@@ -459,14 +507,15 @@ class StickDetect(VisualBasis):
 	
 	def __init__(self, IP, PORT=9559, cameraId=vd.kTopCamera, resolution=vd.kVGA):
 		super(StickDetect, self).__init__(IP, PORT, cameraId, resolution)
-		self._boundRect = []
-		self._cropKeep = 1
-		self._stickAngle = 0.0 # rad
+		self.boundRect = []
+		self.cropKeep = 1
+		self.stickAngle = 0.0 # rad
 		
 	def __preprocess(self, minHSV, maxHSV, cropKeep, morphology):
 		"""
 		preprocess the current frame for stick detection.(binalization, crop etc.)
-		Arguments:
+
+		Args:
 			minHSV: the lower limit for binalization.
 			maxHSV: the upper limit for binalization.
 			cropKeep: crop ratio (>=0.5).
@@ -474,10 +523,10 @@ class StickDetect(VisualBasis):
 		Return:
 			preprocessed image for stick detection.
 		"""
-		self._cropKeep = cropKeep
-		frameArray = self._frameArray
-		height = self._frameHeight
-		width = self._frameWidth
+		self.cropKeep = cropKeep
+		frameArray = self.frameArray
+		height = self.frameHeight
+		width = self.frameWidth
 		try:
 			frameArray = frameArray[int((1-cropKeep)*height):,:]
 		except IndexError:
@@ -496,6 +545,7 @@ class StickDetect(VisualBasis):
 	def __findStick(self, frameBin, minPerimeter, minArea):
 		"""
 		find the yellow stick in the preprocessed frame.
+
 		Args:
 			frameBin: preprocessed frame.
 			minPerimeter: minimum perimeter of detected stick.
@@ -521,16 +571,16 @@ class StickDetect(VisualBasis):
 		if len(rects) == 0:
 			return rects
 		rects = np.array(rects)
-		# print(rects)
 		rect = rects[np.argmax(1.0*(rects[:,-1])/rects[:,-2]),]
-		rect[1] += int(self._frameHeight *(1-self._cropKeep))
+		rect[1] += int(self.frameHeight *(1-self.cropKeep))
 		return rect
 		
 	def updateStickData(self, client="test", minHSV=np.array([27,55,115]), 
-						maxHSV=np.array([45,255,255]), cropKeep=1, 
+						maxHSV=np.array([45,255,255]), cropKeep=0.75, 
 						morphology=True, savePreprocessImg=False):
 		"""
 		update the yellow stick data from the specified camera.
+
 		Args:
 			client: client name
 			minHSV: the lower limit for binalization.
@@ -540,43 +590,43 @@ class StickDetect(VisualBasis):
 			savePreprocessImg: save the preprocessed image or not.
 		"""
 		self.updateFrame(client)
-		minPerimeter = self._frameHeight/8.0
-		minArea = self._frameHeight*self._frameWidth/1000.0
+		minPerimeter = self.frameHeight/8.0
+		minArea = self.frameHeight*self.frameWidth/1000.0
 		frameBin = self.__preprocess(minHSV, maxHSV, cropKeep, morphology)
-		print(np.max(frameBin))
 		if savePreprocessImg:
 			self._frameBin = frameBin.copy()
 		rect = self.__findStick(frameBin, minPerimeter, minArea)
 		if rect == []:
-			self._boundRect = []
-			self._stickAngle = 0.0
+			self.boundRect = []
+			self.stickAngle = 0.0
 		else:
-			self._boundRect = rect
+			self.boundRect = rect
 			centerX = rect[0]+rect[2]/2
-			width = self._frameWidth *1.0
-			self._stickAngle = (width/2-centerX)/width*self._cameraYawRange
-			cameraPosition = self._motionProxy.getPosition("Head", 2, True)
+			width = self.frameWidth *1.0
+			self.stickAngle = (width/2-centerX)/width*self.cameraYawRange
+			cameraPosition = self.motionProxy.getPosition("Head", 2, True)
 			cameraY = cameraPosition[5]
-			# print("cameraY:",cameraY * 180 / 3.14)
-			self._stickAngle += cameraY
+			self.stickAngle += cameraY
 				
 	def showStickPosition(self):
 		"""
 		show the stick  position in the current frame.
 		"""
-		if self._boundRect == []:
-			print("no stick detected.")
-			cv2.imshow("stick position", self._frameArray)
+		if self.boundRect == []:
+			#print("no stick detected.")
+			cv2.imshow("stick position", self.frameArray)
 		else:
-			[x,y,w,h] = self._boundRect
-			frame = self._frameArray.copy()
+			[x,y,w,h] = self.boundRect
+			frame = self.frameArray.copy()
 			cv2.rectangle(frame, (x,y), (x+w,y+h), (0,0,255), 2)
 			cv2.imshow("stick position", frame)
 
 	def slider(self, client):
 		"""
 		slider for stick detection in HSV color space.
-		client: client name.
+		
+		Args:
+			client: client name.
 		"""
 		def __nothing():
 			pass
@@ -601,3 +651,70 @@ class StickDetect(VisualBasis):
 			if k == 27:
 				break
 		cv2.destroyAllWindows()
+
+
+class LandMarkDetect(ConfigureNao):
+	"""
+	detect the landMark.
+	"""
+	def __init__(self, IP, PORT=9559, cameraId=vd.kTopCamera, landMarkSize=0.105):
+		super(LandMarkDetect, self).__init__(IP, PORT)
+		self.cameraId = cameraId
+		self.cameraName = "CameraTop" if cameraId==vd.kTopCamera else "CameraBottom"
+		self.landMarkSize = landMarkSize
+		self.disX = 0
+		self.disY = 0
+		self.dist = 0
+		self.yawAngle = 0
+		
+	def updateLandMarkData(self, client="landMark"):
+		"""
+		update landMark information
+
+		Args:
+			client: client name
+		Return:
+			None.
+		"""
+		self.landMarkProxy.subscribe(client)
+		markData = self.memoryProxy.getData("LandmarkDetected")
+		if (markData is None or len(markData)==0):
+			self.disX = 0
+			self.disY = 0
+			self.dist = 0
+			self.yawAngle = 0
+		else:
+			wzCamera = markData[1][0][0][1]
+			wyCamera = markData[1][0][0][2]
+			angularSize = markData[1][0][0][3]
+			distCameraToLandmark = self.landMarkSize / ( 2 * math.tan( angularSize / 2))
+			transform = self.motionProxy.getTransform(self.cameraName, 2, True)
+			transformList = almath.vectorFloat(transform)
+			robotToCamera = almath.Transform(transformList)
+			cameraToLandmarkRotTrans = almath.Transform_from3DRotation(0, wyCamera, wzCamera)
+			cameraToLandmarkTranslationTrans = almath.Transform(distCameraToLandmark, 0, 0)
+			robotToLandmark = robotToCamera * \
+							  cameraToLandmarkRotTrans * \
+							  cameraToLandmarkTranslationTrans
+			self.disX = robotToLandmark.r1_c4
+			self.disY = robotToLandmark.r2_c4
+			self.dist = np.sqrt(self.disX**2 + self.disY**2)
+			self.yawAngle = math.atan2(self.disY, self.disX)
+
+	def getLandMarkData(self):
+		"""
+		get landMark information.
+
+		Return:
+			a list of disX, disY, dis, and yaw angle.
+		"""
+		return [self.disX, self.disY, self.dist, self.yawAngle]
+
+	def showLandMarkData(self):
+		"""
+		show landmark information detected.
+		"""
+		print("disX = ", self.disX)
+		print("disY = ", self.disY)
+		print("dis = ", self.dist)
+		print("yaw angle = ", self.yawAngle*180.0/np.pi)

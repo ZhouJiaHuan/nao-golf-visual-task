@@ -1,8 +1,8 @@
-## ---------------------------------------------------------------------
-# author: Meringue
-# date: 1/15/2017
-# description: basic class for all Nao tasks.
-## ---------------------------------------------------------------------
+"""
+basic class for all Nao tasks.
+@author: Meringue
+@date: 2018/1/15
+"""
 
 import sys
 #sys.path.append("/home/meringue/Softwares/pynaoqi-sdk/") #naoqi directory
@@ -13,11 +13,17 @@ class ConfigureNao(object):
 	a basic class for all nao tasks, including motion, bisualization etc.
 	"""
 	def __init__(self, IP, PORT=9559):
-		self._IP = IP
-		self._PORT = PORT
-		self._cameraProxy = ALProxy("ALVideoDevice", self._IP, self._PORT)
-		self._motionProxy = ALProxy("ALMotion", self._IP, self._PORT)
-		self._postureProxy = ALProxy("ALRobotPosture", self._IP, self._PORT)
-		self._tts = ALProxy("ALTextToSpeech",self._IP, self._PORT)
-		self._memoryProxy = ALProxy("ALMemory", self._IP, self._PORT)
+		self.IP = IP
+		self.PORT = PORT
+		try:
+			self.cameraProxy = ALProxy("ALVideoDevice", self.IP, self.PORT)
+			self.motionProxy = ALProxy("ALMotion", self.IP, self.PORT)
+			self.postureProxy = ALProxy("ALRobotPosture", self.IP, self.PORT)
+			self.tts = ALProxy("ALTextToSpeech",self.IP, self.PORT)
+			self.memoryProxy = ALProxy("ALMemory", self.IP, self.PORT)
+			self.landMarkProxy = ALProxy("ALLandMarkDetection", self.IP, self.PORT)
+		except Exception, e:
+			print("Error when configuring the NAO!")
+			print(str(e))
+			exit(1)
 	
