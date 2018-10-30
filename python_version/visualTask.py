@@ -67,9 +67,9 @@ class VisualBasis(ConfigureNao):
 		"""
 		if self.cameraProxy.getActiveCamera() != self.cameraId:
 			self.cameraProxy.setActiveCamera(self.cameraId)
-		self._videoClient = self.cameraProxy.subscribe(client, self.resolution, self.colorSpace, self.fps)
-		frame = self.cameraProxy.getImageRemote(self._videoClient)
-		self.cameraProxy.unsubscribe(self._videoClient)
+		videoClient = self.cameraProxy.subscribe(client, self.resolution, self.colorSpace, self.fps)
+		frame = self.cameraProxy.getImageRemote(videoClient)
+		self.cameraProxy.unsubscribe(videoClient)
 		try:
 			self.frameWidth = frame[0]
 			self.frameHeight = frame[1]
@@ -666,6 +666,7 @@ class LandMarkDetect(ConfigureNao):
 		self.disY = 0
 		self.dist = 0
 		self.yawAngle = 0
+		self.cameraProxy.setActiveCamera(self.cameraId)
 		
 	def updateLandMarkData(self, client="landMark"):
 		"""
@@ -676,8 +677,11 @@ class LandMarkDetect(ConfigureNao):
 		Return:
 			None.
 		"""
+		if self.cameraProxy.getActiveCamera() != self.cameraId:
+			self.cameraProxy.setActiveCamera(self.cameraId)
 		self.landMarkProxy.subscribe(client)
 		markData = self.memoryProxy.getData("LandmarkDetected")
+		self.cameraProxy.unsubscribe(client)
 		if (markData is None or len(markData)==0):
 			self.disX = 0
 			self.disY = 0
