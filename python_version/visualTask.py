@@ -67,6 +67,8 @@ class VisualBasis(ConfigureNao):
 		"""
 		if self.cameraProxy.getActiveCamera() != self.cameraId:
 			self.cameraProxy.setActiveCamera(self.cameraId)
+			time.sleep(1)
+		
 		videoClient = self.cameraProxy.subscribe(client, self.resolution, self.colorSpace, self.fps)
 		frame = self.cameraProxy.getImageRemote(videoClient)
 		self.cameraProxy.unsubscribe(videoClient)
@@ -76,7 +78,7 @@ class VisualBasis(ConfigureNao):
 			self.frameChannels = frame[2]
 			self.frameArray = np.frombuffer(frame[6], dtype=np.uint8).reshape([frame[1],frame[0],frame[2]])
 		except IndexError:
-			raise
+			print("get image failed!")
 		
 	def getFrameArray(self):
 		"""
@@ -151,7 +153,7 @@ class BallDetect(VisualBasis):
 			channelG = self.frameArray[:,:,1]
 			channelR = self.frameArray[:,:,2]
 		except:
-			raise Exception("no image detected!")
+			print("no image detected!")
 		Hm = 6
 		if color == "red":
 			channelB = channelB*0.1*Hm
@@ -198,13 +200,13 @@ class BallDetect(VisualBasis):
 			frameArray = self.frameArray.copy()
 			imgHSV = cv2.cvtColor(frameArray, cv2.COLOR_BGR2HSV)
 		except:
-			raise Exception("no image detected!")
-		frameBin1 = cv2.inRange(imgHSV, minHSV1, maxHSV1)
-		frameBin2 = cv2.inRange(imgHSV, minHSV2, maxHSV2)
-		frameBin = np.maximum(frameBin1, frameBin2)
-		frameBin = cv2.GaussianBlur(frameBin, (9,9), 1.5)
-		#cv2.imshow("bin image", frameBin)
-		return frameBin        
+			print("no image detected!")
+		else:
+			frameBin1 = cv2.inRange(imgHSV, minHSV1, maxHSV1)
+			frameBin2 = cv2.inRange(imgHSV, minHSV2, maxHSV2)
+			frameBin = np.maximum(frameBin1, frameBin2)
+			frameBin = cv2.GaussianBlur(frameBin, (9,9), 1.5)
+			return frameBin        
 
 	def __findCircles(self, img, minDist, minRadius, maxRadius):
 		"""
@@ -293,7 +295,6 @@ class BallDetect(VisualBasis):
 			cameraDirection = bottomCameraDirection[standState]
 		except KeyError:
 			print("Error! unknown standState, please check the value of stand state!")
-			raise
 		else:
 			if self.ballData["radius"] == 0:
 				self.ballPosition= {"disX":0, "disY":0, "angle":0}
@@ -336,7 +337,6 @@ class BallDetect(VisualBasis):
 			cameraDirection = bottomCameraDirection[standState]
 		except KeyError:
 			print("Error! unknown standState, please check the value of stand state!")
-			raise
 		else:
 			if self.ballData["radius"] == 0:
 				self.ballPosition= {"disX":0, "disY":0, "angle":0}
@@ -530,7 +530,7 @@ class StickDetect(VisualBasis):
 		try:
 			frameArray = frameArray[int((1-cropKeep)*height):,:]
 		except IndexError:
-			raise		
+			print("error happened when crop the image!")		
 		frameHSV = cv2.cvtColor(frameArray, cv2.COLOR_BGR2HSV)
 		frameBin = cv2.inRange(frameHSV, minHSV, maxHSV)
 		kernelErosion = np.ones((5,5), np.uint8)
@@ -679,6 +679,7 @@ class LandMarkDetect(ConfigureNao):
 		"""
 		if self.cameraProxy.getActiveCamera() != self.cameraId:
 			self.cameraProxy.setActiveCamera(self.cameraId)
+			time.sleep(1)
 		self.landMarkProxy.subscribe(client)
 		markData = self.memoryProxy.getData("LandmarkDetected")
 		self.cameraProxy.unsubscribe(client)
