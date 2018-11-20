@@ -20,13 +20,13 @@ from visualTask import *
 from naoqi import ALProxy
 import vision_definitions as vd
 
-IP = "192.168.1.100"
+IP = "192.168.1.103"
 #IP = "169.254.67.213"
 #IP = "169.254.143.164"
 
 visualBasis = VisualBasis(IP,cameraId=0, resolution=vd.kVGA)
-ballDetect = BallDetect(IP, resolution=vd.kVGA)
-stickDetect = StickDetect(IP, cameraId=0, resolution=vd.kVGA)
+ballDetect = BallDetect(IP, resolution=vd.kVGA, writeFrame=True)
+stickDetect = StickDetect(IP, cameraId=0, resolution=vd.kVGA, writeFrame=True)
 landMarkDetect = LandMarkDetect(IP)
 
 # test code
@@ -47,23 +47,23 @@ postureProxy.goToPosture("StandInit", 0.5)
 #visualBasis.motionProxy.wakeUp()
 #visualBasis.postureProxy.goToPosture("StandInit", 0.5)
 
-
+"""
 while 1:
 	time1 = time.time()
 	ballDetect.updateBallData(client="xxxx", colorSpace="HSV", fitting=True)
-	print(ballDetect.getBallInfoInImage())
+	#print(ballDetect.getBallInfoInImage())
 	time2 = time.time()
 	#print("update data time = ", time2-time1)
-	#ballDetect.showBallPosition()
-	cv2.waitKey(20)
-
-
+	ballDetect.showBallPosition()
+	cv2.waitKey(1000)
 """
+
+
 while 1:
 	stickDetect.updateStickData(client="xxx")
 	stickDetect.showStickPosition()
-	cv2.waitKey(20)
-"""
+	cv2.waitKey(1000)
+
 
 """
 while 1:

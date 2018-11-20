@@ -130,7 +130,8 @@ class BallDetect(VisualBasis):
 	"""
 	derived from VisualBasics, used to detect the ball.
 	"""
-	def __init__(self, IP, PORT=9559, cameraId=vd.kBottomCamera, resolution=vd.kVGA):
+	def __init__(self, IP, PORT=9559, cameraId=vd.kBottomCamera, resolution=vd.kVGA, 
+				 writeFrame=False):
 		"""
 		initialization.
 		"""
@@ -138,6 +139,7 @@ class BallDetect(VisualBasis):
 		self.ballData = {"centerX":0, "centerY":0, "radius":0}
 		self.ballPosition= {"disX":0, "disY":0, "angle":0}
 		self.ballRadius = 0.025
+		self.writeFrame = writeFrame
 
 	def __getChannelAndBlur(self, color):
 		"""
@@ -372,6 +374,18 @@ class BallDetect(VisualBasis):
 				self.ballPosition["disX"] = disX
 				self.ballPosition["disY"] = disY
 				self.ballPosition["angle"] = ballYaw
+	def __writeFrame(self, saveDir="./ballData"):
+		"""
+		write current frame to specifid directory.
+		"""
+		if not os.path.exists(saveDir):
+			os.makedirs(saveDir)
+		saveName=str(int(time.time()))
+		saveImgPath = os.path.join(saveDir, saveName+".jpg")
+		try:
+			cv2.imwrite(saveImgPath, self.frameArray)
+		except:
+			print("Error when saveing current frame!")
 								   
 	def updateBallData(self, client="python_client", standState="standInit", color="red", 
 					   colorSpace="BGR", fitting=False, minHSV1=np.array([0,43,46]), 
@@ -386,12 +400,12 @@ class BallDetect(VisualBasis):
 			colorSpace: "BGR", "HSV".
 			fittting: the method of localization.
 			minHSV1, maxHSV1, minHSV2, maxHSV2: only for HSV color space.
-			saveFrameBin: save the preprocessed frame or not.
+			saveFrame: save current frame to disk or not (without ball information).
+			saveFrameBin: save the preprocessed frame in the class or not.
 		Return: 
 			a dict with ball data. for example: {"centerX":0, "centerY":0, "radius":0}.
 		"""
 		self.updateFrame(client)
-		#cv2.imwrite("src_image.jpg", self._frameArray)
 		minDist = int(self.frameHeight/30.0)
 		minRadius = 1
 		maxRadius = int(self.frameHeight/10.0)
@@ -412,12 +426,16 @@ class BallDetect(VisualBasis):
 			self.ballData = {"centerX":0, "centerY":0, "radius":0}
 			self.ballPosition= {"disX":0, "disY":0, "angle":0}
 		else:
-			circle = circle.reshape([-1,3])    
+			circle = circle.reshape([-1,3])
 			self.ballData = {"centerX":circle[0][0], "centerY":circle[0][1], "radius":circle[0][2]}
 			if fitting == True:
 				self.__updateBallPositionFitting(standState=standState)
 			else:
 				self.__updateBallPosition(standState=standState)
+			
+			if self.writeFrame == True:
+				self.__writeFrame()
+
 		  	
 	def getBallPosition(self):
 		"""
@@ -445,7 +463,7 @@ class BallDetect(VisualBasis):
 		
 	def showBallPosition(self):        
 		"""
-		show ball data in the current frame.
+		show and save ball data in the current frame.
 		"""
 		if self.ballData["radius"] == 0:
 			#print("no ball found.")
@@ -454,15 +472,15 @@ class BallDetect(VisualBasis):
 		else:
 			#print("ballX = ", self.ballData["centerX"])
 			#print("ballY = ", self.ballData["centerY"])
-			print("ball postion = ", (self.ballPosition["disX"], self.ballPosition["disY"]))
+			#print("ball postion = ", (self.ballPosition["disX"], self.ballPosition["disY"]))
 			#print("ball direction = ", self.ballPosition["angle"]*180/3.14)
-			frameArray = self.frameArray
+			frameArray = self.frameArray.copy()
 			cv2.circle(frameArray, (self.ballData["centerX"],self.ballData["centerY"]),
 					   self.ballData["radius"], (250,150,150),2)
 			cv2.circle(frameArray, (self.ballData["centerX"],self.ballData["centerY"]),
 					   2, (50,250,50), 3)
 			cv2.imshow("ball position", frameArray)
-			#cv2.imwrite("ball_position.jpg", frameArray)
+				
 	
 	def sliderHSV(self, client):
 		"""
@@ -505,11 +523,14 @@ class StickDetect(VisualBasis):
 	derived from VisualBasics, used to detect the stict.
 	"""
 	
-	def __init__(self, IP, PORT=9559, cameraId=vd.kTopCamera, resolution=vd.kVGA):
+	def __init__(self, IP, PORT=9559, cameraId=vd.kTopCamera, resolution=vd.kVGA, 
+				 writeFrame=False):
 		super(StickDetect, self).__init__(IP, PORT, cameraId, resolution)
 		self.boundRect = []
 		self.cropKeep = 1
 		self.stickAngle = 0.0 # rad
+		self.writeFrame = writeFrame
+
 		
 	def __preprocess(self, minHSV, maxHSV, cropKeep, morphology):
 		"""
@@ -574,6 +595,19 @@ class StickDetect(VisualBasis):
 		rect = rects[np.argmax(1.0*(rects[:,-1])/rects[:,-2]),]
 		rect[1] += int(self.frameHeight *(1-self.cropKeep))
 		return rect
+
+	def __writeFrame(self, saveDir="./stickData"):
+		"""
+		write current frame to specifid directory.
+		"""
+		if not os.path.exists(saveDir):
+			os.makedirs(saveDir)
+		saveName=str(int(time.time()))
+		saveImgPath = os.path.join(saveDir, saveName+".jpg")
+		try:
+			cv2.imwrite(saveImgPath, self.frameArray)
+		except:
+			print("Error when saveing current frame!")
 		
 	def updateStickData(self, client="test", minHSV=np.array([27,55,115]), 
 						maxHSV=np.array([45,255,255]), cropKeep=0.75, 
@@ -607,7 +641,9 @@ class StickDetect(VisualBasis):
 			cameraPosition = self.motionProxy.getPosition("Head", 2, True)
 			cameraY = cameraPosition[5]
 			self.stickAngle += cameraY
-				
+			if self.writeFrame == True:
+				self.__writeFrame()
+		
 	def showStickPosition(self):
 		"""
 		show the stick  position in the current frame.
